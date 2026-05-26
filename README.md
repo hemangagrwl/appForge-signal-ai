@@ -353,7 +353,5 @@ docker run -p 3000:3000 -e ANTHROPIC_API_KEY=sk-ant-... appforge
 **Why `Promise.all` for schema generation?** UI, API, DB, and Auth schemas are all derived from the AppSpec IR independently. There is no data dependency between them at generation time. Running them in parallel reduces latency by ~60% vs sequential.
 
 ---
-
-## License
-
-MIT
+##
+Hemang Agarwal
