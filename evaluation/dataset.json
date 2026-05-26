@@ -1,0 +1,27 @@
+{
+  "real": [
+    "CRM with login, contacts, dashboard, payments and premium plans",
+    "Hospital management system with doctors, patients and appointments",
+    "Learning platform with courses, quizzes and student progress",
+    "E-commerce marketplace with products and orders",
+    "Project management app with tasks and teams",
+    "Inventory management system with warehouses",
+    "Blog CMS with authentication and admin panel",
+    "Job portal with recruiters and applicants",
+    "Fitness tracker with subscriptions",
+    "Support ticket system with analytics"
+  ],
+
+  "edge": [
+    "Build something cool",
+    "Make users premium but free",
+    "Admin cannot access analytics",
+    "No login but secure access",
+    "Users pay without payment system",
+    "Build app",
+    "Make everything real-time",
+    "No roles but role permissions",
+    "Marketplace without products",
+    "Unlimited restrictions"
+  ]
+}

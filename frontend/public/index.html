@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AppForge v2 — NL → App Compiler</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap');
+:root{--bg:#09090f;--s1:#111118;--s2:#1a1a26;--border:#252535;--a:#7c3aed;--a2:#06b6d4;--a3:#10b981;--warn:#f59e0b;--danger:#ef4444;--text:#e2e8f0;--muted:#4a5568;--mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,58,237,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,.03) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0}
+header{position:relative;z-index:10;padding:18px 36px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(9,9,15,.9);backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;letter-spacing:-.5px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--a),var(--a2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.badge{font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);color:var(--a);letter-spacing:1px}
+.hdr-stages{display:flex;gap:6px;align-items:center}
+.sp{font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--muted);transition:all .3s;white-space:nowrap}
+.sp.active{border-color:var(--a);color:var(--a);background:rgba(124,58,237,.1)}
+.sp.done{border-color:var(--a3);color:var(--a3);background:rgba(16,185,129,.08)}
+.sp.repaired{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,.08)}
+.sp.error{border-color:var(--danger);color:var(--danger)}
+main{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:32px;display:grid;grid-template-columns:400px 1fr;gap:28px;min-height:calc(100vh - 65px)}
+.left{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px}
+.card h2{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+textarea{background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;padding:14px;resize:vertical;min-height:150px;width:100%;transition:border-color .2s;outline:none}
+textarea:focus{border-color:var(--a)}
+textarea::placeholder{color:var(--muted)}
+.btn{background:linear-gradient(135deg,var(--a),#6d28d9);border:none;border-radius:10px;color:#fff;cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:700;padding:13px 20px;width:100%;letter-spacing:.5px;transition:all .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(124,58,237,.35)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-sm{background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:10px;padding:4px 10px;transition:all .2s;white-space:nowrap}
+.btn-sm:hover{color:var(--text);border-color:var(--a)}
+.example-chips{display:flex;flex-direction:column;gap:5px}
+.chip{background:var(--s2);border:1px solid var(--border);border-radius:7px;color:var(--text);cursor:pointer;font-size:12px;line-height:1.4;padding:7px 11px;text-align:left;transition:all .2s;font-family:var(--sans)}
+.chip:hover{border-color:var(--a);background:rgba(124,58,237,.08);color:#c4b5fd}
+.mbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.met{text-align:center}
+.mv{font-family:var(--mono);font-size:20px;font-weight:700;background:linear-gradient(135deg,var(--a2),var(--a));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.ml{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+/* Pipeline state tracker */
+.pipe-track{display:flex;flex-direction:column;gap:4px}
+.pstage{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:6px;font-size:11px;transition:all .3s;border:1px solid transparent}
+.pstage.pending{color:var(--muted)}
+.pstage.running{color:var(--a);background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.2)}
+.pstage.success{color:var(--a3)}
+.pstage.repaired{color:var(--warn)}
+.pstage.failed{color:var(--danger)}
+.pstage.skipped{color:var(--muted);opacity:.5}
+.pstage-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.pstage-label{font-family:var(--mono);font-weight:500}
+.pstage-detail{margin-left:auto;font-size:10px;opacity:.7}
+.pstage-dur{font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:4px}
+/* Right panel */
+.right{display:flex;flex-direction:column}
+.tab-bar{display:flex;gap:2px;padding:4px;background:var(--s1);border:1px solid var(--border);border-bottom:none;border-radius:12px 12px 0 0;overflow-x:auto}
+.tab{background:none;border:none;border-radius:8px;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.5px;padding:7px 13px;transition:all .2s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.tab:hover{color:var(--text);background:var(--s2)}
+.tab.active{background:var(--s2);color:var(--text)}
+.tdot{width:5px;height:5px;border-radius:50%;background:var(--border)}
+.tab.active .tdot{background:var(--a)}
+.content{background:var(--s1);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;flex:1;overflow:hidden;min-height:580px;position:relative}
+.tc{display:none;height:100%}
+.tc.active{display:flex;flex-direction:column;height:100%}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:var(--muted);padding:40px}
+.empty-icon{font-size:44px;opacity:.35}
+.empty h3{font-size:17px;color:var(--text);opacity:.55}
+.empty p{font-size:13px;text-align:center;max-width:300px;line-height:1.6}
+/* Loading */
+.loading{display:none;position:absolute;inset:0;background:rgba(9,9,15,.88);backdrop-filter:blur(4px);z-index:20;align-items:center;justify-content:center;flex-direction:column;gap:18px;border-radius:0 0 12px 12px}
+.loading.show{display:flex}
+.spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--a);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-status{font-family:var(--mono);font-size:12px;color:var(--a);text-align:center}
+/* JSON viewer */
+.jv{font-family:var(--mono);font-size:12px;line-height:1.7;overflow:auto;padding:20px;flex:1}
+.jk{color:#93c5fd}.js{color:#86efac}.jn{color:#fde68a}.jb{color:#f9a8d4}.jp{color:var(--muted)}
+/* Schema summary grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px;overflow-y:auto;flex:1}
+.sc{background:var(--s2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sch{padding:10px 14px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;letter-spacing:.5px}
+.sch.ui{background:rgba(124,58,237,.08);color:#c4b5fd}
+.sch.api{background:rgba(6,182,212,.08);color:#67e8f9}
+.sch.db{background:rgba(16,185,129,.08);color:#6ee7b7}
+.sch.auth{background:rgba(245,158,11,.08);color:#fde68a}
+.scb{padding:10px 14px;font-family:var(--mono);font-size:11px;max-height:220px;overflow-y:auto;color:var(--muted)}
+.sstat{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.sstatl{color:var(--muted)}.sstatv{color:var(--text);font-weight:600}
+/* Simulation */
+.sim-grid{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px}
+.sim-check{display:flex;align-items:flex-start;gap:10px;padding:9px 13px;border-radius:8px;font-size:12px;border:1px solid transparent}
+.sim-check.pass{background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.15)}
+.sim-check.fail{background:rgba(239,68,68,.05);border-color:rgba(239,68,68,.15)}
+.sim-check.warn{background:rgba(245,158,11,.05);border-color:rgba(245,158,11,.15)}
+.sim-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.sim-name{font-family:var(--mono);font-weight:600;color:var(--text)}
+.sim-detail{color:var(--muted);font-size:11px;margin-top:2px}
+/* Patch log */
+.patch-log{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px}
+.patch{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-family:var(--mono);font-size:11px}
+.pop{color:var(--a2);font-weight:600;margin-right:6px}
+.player{color:var(--warn);margin-right:4px}
+.preason{color:var(--muted);display:block;margin-top:3px;font-size:10px}
+/* Eval */
+.eval-wrap{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px}
+.score-row{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;align-items:center;gap:16px}
+.score-circle{width:72px;height:72px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+.sv{font-family:var(--mono);font-size:22px;font-weight:700}
+.sg{font-size:10px;opacity:.7}
+.sA{background:rgba(16,185,129,.12);border:2px solid var(--a3);color:var(--a3)}
+.sB{background:rgba(6,182,212,.12);border:2px solid var(--a2);color:var(--a2)}
+.sC{background:rgba(245,158,11,.12);border:2px solid var(--warn);color:var(--warn)}
+.sD,.sF{background:rgba(239,68,68,.12);border:2px solid var(--danger);color:var(--danger)}
+.dim-bar{display:flex;align-items:center;gap:8px;font-size:11px}
+.dl{width:110px;color:var(--muted);font-family:var(--mono)}
+.dt{flex:1;height:5px;background:var(--s2);border-radius:3px;overflow:hidden}
+.df{height:100%;border-radius:3px;transition:width 1s ease}
+.ds{width:32px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--muted)}
+/* Clarification */
+.clarif{padding:24px;display:flex;flex-direction:column;gap:14px}
+.clarif-title{font-size:16px;font-weight:700;color:var(--warn)}
+.clarif-q{background:var(--s2);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px 14px;font-size:13px;line-height:1.5}
+.clarif-q::before{content:'❓ ';opacity:.6}
+.clarif-btn{background:rgba(124,58,237,.15);border:1px solid var(--a);border-radius:8px;color:var(--a);cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;padding:10px 18px;transition:all .2s}
+.clarif-btn:hover{background:rgba(124,58,237,.25)}
+/* Assumptions bar */
+.assump{background:rgba(6,182,212,.05);border-top:1px solid rgba(6,182,212,.15);padding:8px 16px;font-size:11px;color:var(--a2);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.achip{background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.2);border-radius:4px;padding:2px 7px;font-family:var(--mono);font-size:10px}
+/* Artifacts */
+.artifact-tree{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px}
+.artifact-item{background:var(--s2);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.artifact-header{padding:7px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--a2)}
+.artifact-header:hover{background:rgba(6,182,212,.05)}
+.artifact-body{font-family:var(--mono);font-size:11px;padding:10px 14px;background:var(--bg);color:var(--text);white-space:pre;overflow-x:auto;max-height:200px;display:none;line-height:1.5}
+.artifact-body.open{display:block}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    AppForge
+    <span class="badge">v2.0</span>
+  </div>
+  <div class="hdr-stages" id="hdrStages"></div>
+</header>
+
+<main>
+  <div class="left">
+    <div class="card">
+      <h2>📝 App Description</h2>
+      <textarea id="promptInput" placeholder="Describe the app you want to build...
+
+Example: Build a CRM with login, contacts, dashboard, role-based access, and premium plan with payments."></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <button class="btn" id="genBtn" onclick="generate()" style="flex:1">⚡ Compile App Config</button>
+        <button class="btn-sm" onclick="generate(true)" title="Skip clarification check">Skip clarif.</button>
+      </div>
+    </div>
+
+    <!-- Pipeline State Tracker -->
+    <div class="card">
+      <h2>🔄 Pipeline State</h2>
+      <div class="pipe-track" id="pipeTrack"></div>
+    </div>
+
+    <!-- Examples -->
+    <div class="card">
+      <h2>💡 Examples</h2>
+      <div class="example-chips">
+        <div class="chip" onclick="usePrompt(this)">CRM with login, contacts, dashboard, role-based access (admin/sales), premium plan with payments. Admins see analytics.</div>
+        <div class="chip" onclick="usePrompt(this)">E-commerce with product listings, cart, Stripe checkout, order tracking, seller dashboard.</div>
+        <div class="chip" onclick="usePrompt(this)">Healthcare appointment system with doctor profiles, booking, reminders, and billing.</div>
+        <div class="chip" onclick="usePrompt(this)" title="Edge: vague">⚠ Build an app</div>
+        <div class="chip" onclick="usePrompt(this)" title="Edge: conflicting">⚠ Free app where premium features are accessible without paying but also has paid tiers</div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="card mbar" id="metricsBar">
+      <div class="met"><div class="mv" id="mPages">—</div><div class="ml">Pages</div></div>
+      <div class="met"><div class="mv" id="mEps">—</div><div class="ml">Endpoints</div></div>
+      <div class="met"><div class="mv" id="mTables">—</div><div class="ml">Tables</div></div>
+      <div class="met"><div class="mv" id="mScore">—</div><div class="ml">Score</div></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="tab-bar">
+      <button class="tab active" onclick="tab('overview')"><span class="tdot"></span>Overview</button>
+      <button class="tab" onclick="tab('ui')"><span class="tdot"></span>UI</button>
+      <button class="tab" onclick="tab('api')"><span class="tdot"></span>API</button>
+      <button class="tab" onclick="tab('db')"><span class="tdot"></span>DB</button>
+      <button class="tab" onclick="tab('auth')"><span class="tdot"></span>Auth</button>
+      <button class="tab" onclick="tab('ir')"><span class="tdot"></span>AppSpec IR</button>
+      <button class="tab" onclick="tab('sim')"><span class="tdot"></span>Simulation</button>
+      <button class="tab" onclick="tab('patches')"><span class="tdot"></span>Patches</button>
+      <button class="tab" onclick="tab('artifacts')"><span class="tdot"></span>Artifacts</button>
+      <button class="tab" onclick="tab('eval')"><span class="tdot"></span>Eval</button>
+      <button class="tab" onclick="tab('raw')"><span class="tdot"></span>Raw JSON</button>
+    </div>
+
+    <div class="content">
+      <div class="loading" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="load-status" id="loadStatus">Initializing pipeline...</div>
+      </div>
+
+      <!-- OVERVIEW -->
+      <div class="tc active" id="tc-overview">
+        <div class="empty" id="ovEmpty">
+          <div class="empty-icon">⚡</div>
+          <h3>Ready to Compile</h3>
+          <p>Enter an app description and click Compile. The 8-stage pipeline will run and produce validated, executable app configs.</p>
+          <p style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--a)">NL → Clarify → Intent → IR → Design → Schemas → Validate → Runtime → Simulate → Eval</p>
+        </div>
+        <div id="clarifPanel" style="display:none" class="clarif"></div>
+        <div class="sgrid" id="ovGrid" style="display:none">
+          <div class="sc"><div class="sch ui">🎨 UI Schema</div><div class="scb" id="s-ui"></div></div>
+          <div class="sc"><div class="sch api">📡 API Schema</div><div class="scb" id="s-api"></div></div>
+          <div class="sc"><div class="sch db">🗄️ DB Schema</div><div class="scb" id="s-db"></div></div>
+          <div class="sc"><div class="sch auth">🔐 Auth Schema</div><div class="scb" id="s-auth"></div></div>
+        </div>
+        <div class="assump" id="assumpBar" style="display:none"><strong>Assumptions:</strong><div id="assumpList"></div></div>
+      </div>
+
+      <!-- UI -->
+      <div class="tc" id="tc-ui"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyLayer('ui')">Copy</button><div class="jv" id="jv-ui"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+      <!-- API -->
+      <div class="tc" id="tc-api"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyLayer('api')">Copy</button><div class="jv" id="jv-api"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+      <!-- DB -->
+      <div class="tc" id="tc-db"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyLayer('db')">Copy</button><div class="jv" id="jv-db"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+      <!-- Auth -->
+      <div class="tc" id="tc-auth"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyLayer('auth')">Copy</button><div class="jv" id="jv-auth"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+      <!-- IR -->
+      <div class="tc" id="tc-ir"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyIR()">Copy IR</button><div class="jv" id="jv-ir"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+
+      <!-- SIMULATION -->
+      <div class="tc" id="tc-sim">
+        <div class="sim-grid" id="simGrid"><div style="color:var(--muted);font-family:var(--mono);font-size:12px;padding:40px;text-align:center">Run pipeline to see simulation results</div></div>
+      </div>
+
+      <!-- PATCHES -->
+      <div class="tc" id="tc-patches">
+        <div class="patch-log" id="patchLog"><div style="color:var(--muted);font-family:var(--mono);font-size:12px;padding:40px;text-align:center">Run pipeline to see patch log</div></div>
+      </div>
+
+      <!-- ARTIFACTS -->
+      <div class="tc" id="tc-artifacts">
+        <div class="artifact-tree" id="artifactTree"><div style="color:var(--muted);font-family:var(--mono);font-size:12px;padding:40px;text-align:center">Run pipeline to see generated artifacts</div></div>
+      </div>
+
+      <!-- EVAL -->
+      <div class="tc" id="tc-eval">
+        <div class="eval-wrap" id="evalWrap"><div style="color:var(--muted);font-family:var(--mono);font-size:12px;padding:40px;text-align:center">Run pipeline to see evaluation</div></div>
+      </div>
+
+      <!-- RAW -->
+      <div class="tc" id="tc-raw"><button class="btn-sm" style="margin:10px 10px 0 auto" onclick="copyAll()">Copy All</button><div class="jv" id="jv-raw"><span style="color:var(--muted)">Run pipeline first</span></div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const STAGE_DEFS = [
+  {id:'clarification',label:'Clarification'},
+  {id:'intent_extraction',label:'Intent'},
+  {id:'ir_build',label:'AppSpec IR'},
+  {id:'system_design',label:'Design'},
+  {id:'schema_generation',label:'Schemas'},
+  {id:'zod_validation',label:'Zod Validate'},
+  {id:'repair',label:'Repair'},
+  {id:'runtime',label:'Runtime Gen'},
+  {id:'simulation',label:'Simulate'},
+  {id:'evaluation',label:'Evaluate'},
+];
+
+let lastResult = null;
+
+// Init pipeline track
+function initPipelineTrack() {
+  const el = document.getElementById('pipeTrack');
+  const hdr = document.getElementById('hdrStages');
+  el.innerHTML = STAGE_DEFS.map(s => `
+    <div class="pstage pending" id="ps-${s.id}">
+      <span class="pstage-dot"></span>
+      <span class="pstage-label">${s.label}</span>
+      <span class="pstage-detail" id="psd-${s.id}"></span>
+      <span class="pstage-dur" id="psms-${s.id}"></span>
+    </div>`).join('');
+  hdr.innerHTML = STAGE_DEFS.map(s => `<div class="sp" id="hsp-${s.id}">${s.label}</div>`).join('');
+}
+initPipelineTrack();
+
+function updateStages(pipelineState) {
+  if (!pipelineState?.stages) return;
+  for (const [id, stage] of Object.entries(pipelineState.stages)) {
+    const el = document.getElementById(`ps-${id}`);
+    const hsp = document.getElementById(`hsp-${id}`);
+    const det = document.getElementById(`psd-${id}`);
+    const dur = document.getElementById(`psms-${id}`);
+    if (!el) continue;
+    el.className = `pstage ${stage.state.toLowerCase()}`;
+    if (hsp) hsp.className = `sp ${stage.state.toLowerCase()}`;
+    if (det) {
+      const meta = stage.metadata || {};
+      if (stage.state === 'SUCCESS' || stage.state === 'REPAIRED') {
+        if (meta.entities) det.textContent = `${meta.entities} entities`;
+        else if (meta.patchCount) det.textContent = `${meta.patchCount} patches`;
+        else if (meta.artifactCount) det.textContent = `${meta.artifactCount} files`;
+        else if (meta.score) det.textContent = `score: ${meta.score}`;
+        else det.textContent = '';
+      } else if (stage.state === 'FAILED') {
+        det.textContent = stage.error?.slice(0,30) || 'failed';
+      }
+    }
+    if (dur && stage.durationMs) dur.textContent = `${stage.durationMs}ms`;
+  }
+}
+
+function resetStages() {
+  STAGE_DEFS.forEach(s => {
+    const el = document.getElementById(`ps-${s.id}`);
+    const hsp = document.getElementById(`hsp-${s.id}`);
+    const det = document.getElementById(`psd-${s.id}`);
+    const dur = document.getElementById(`psms-${s.id}`);
+    if (el) el.className = 'pstage pending';
+    if (hsp) hsp.className = 'sp';
+    if (det) det.textContent = '';
+    if (dur) dur.textContent = '';
+  });
+}
+
+// Tabs
+function tab(name) {
+  document.querySelectorAll('.tc').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const names = ['overview','ui','api','db','auth','ir','sim','patches','artifacts','eval','raw'];
+  document.getElementById('tc-'+name)?.classList.add('active');
+  document.querySelectorAll('.tab')[names.indexOf(name)]?.classList.add('active');
+}
+
+function usePrompt(el) {
+  document.getElementById('promptInput').value = el.textContent.replace(/^⚠\s*/,'').split('(')[0].trim();
+}
+
+// Generate
+async function generate(skipClarif = false) {
+  const prompt = document.getElementById('promptInput').value.trim();
+  if (!prompt) return;
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Compiling...';
+  resetStages();
+  document.getElementById('loadingOverlay').classList.add('show');
+  document.getElementById('loadStatus').textContent = 'Stage 1: Analyzing prompt...';
+
+  // Animate loading status
+  let stageIdx = 0;
+  const statusMsgs = ['Analyzing prompt...','Extracting intent...','Building AppSpec IR...','Designing architecture...','Generating schemas...','Validating with Zod...','Applying patches...','Generating artifacts...','Running simulation...','Evaluating quality...'];
+  const statusInterval = setInterval(() => {
+    if (stageIdx < statusMsgs.length) {
+      document.getElementById('loadStatus').textContent = statusMsgs[stageIdx++];
+    }
+  }, 2200);
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ prompt, skipClarification: skipClarif }),
+    });
+    const result = await res.json();
+    lastResult = result;
+    clearInterval(statusInterval);
+    updateStages(result.pipelineState);
+
+    if (result.needsClarification) {
+      renderClarification(result.clarification, prompt);
+      tab('overview');
+    } else if (result.success || result.schemas) {
+      renderResult(result);
+      tab('overview');
+    } else {
+      alert('Pipeline error: ' + (result.error || 'Unknown error'));
+    }
+  } catch (err) {
+    clearInterval(statusInterval);
+    alert('Request failed: ' + err.message);
+  } finally {
+    document.getElementById('loadingOverlay').classList.remove('show');
+    btn.disabled = false;
+    btn.textContent = '⚡ Compile App Config';
+  }
+}
+
+function renderClarification(clarif, originalPrompt) {
+  document.getElementById('ovEmpty').style.display = 'none';
+  document.getElementById('ovGrid').style.display = 'none';
+  const panel = document.getElementById('clarifPanel');
+  panel.style.display = 'flex';
+
+  const issues = [...(clarif.conflictingRequirements||[]), ...(clarif.issues||[])];
+
+  panel.innerHTML = `
+    <div class="clarif-title">⚠ Prompt needs clarification (confidence: ${(clarif.confidence*100).toFixed(0)}%)</div>
+    ${issues.length ? `<div style="font-size:12px;color:var(--danger)">${issues.map(i=>`• ${i}`).join('<br>')}</div>` : ''}
+    <div style="font-size:12px;color:var(--muted)">Questions:</div>
+    ${(clarif.clarificationQuestions||[]).map(q => `<div class="clarif-q">${esc(q)}</div>`).join('')}
+    ${clarif.assumptions?.length ? `<div style="font-size:12px;color:var(--a2)">I'll assume: ${clarif.assumptions.map(a=>`<em>${a}</em>`).join(', ')}</div>` : ''}
+    <button class="clarif-btn" onclick="generate(true)">⚡ Proceed with Assumptions</button>
+  `;
+}
+
+function renderResult(result) {
+  const { schemas, appSpec, simulation, patchLog, clarification, evaluation, artifacts, assumptions, warnings } = result;
+  document.getElementById('clarifPanel').style.display = 'none';
+  document.getElementById('ovEmpty').style.display = 'none';
+  document.getElementById('ovGrid').style.display = 'grid';
+
+  // Metrics
+  document.getElementById('mPages').textContent = schemas?.ui?.pages?.length ?? appSpec?.pages?.length ?? '?';
+  document.getElementById('mEps').textContent = schemas?.api?.endpoints?.length ?? appSpec?.endpoints?.length ?? '?';
+  document.getElementById('mTables').textContent = schemas?.db?.tables?.length ?? appSpec?.entities?.length ?? '?';
+  document.getElementById('mScore').textContent = evaluation?.qualityScore ?? `${Math.round((evaluation?.score||0)*100)}%`;
+
+  // Summary cards
+  const ui = schemas?.ui;
+  document.getElementById('s-ui').innerHTML = [
+    stat('Pages', ui?.pages?.length??0), stat('Components', ui?.components?.length??0),
+    ...(ui?.pages||[]).slice(0,5).map(p=>stat(p.name, p.route)),
+  ].join('');
+
+  const api = schemas?.api;
+  const methods = {};
+  (api?.endpoints||[]).forEach(e=>{methods[e.method]=(methods[e.method]||0)+1});
+  document.getElementById('s-api').innerHTML = [
+    stat('Endpoints', api?.endpoints?.length??0), stat('Auth', api?.auth?.type??'jwt'),
+    ...Object.entries(methods).map(([m,c])=>stat(m,c)),
+  ].join('');
+
+  const db = schemas?.db;
+  document.getElementById('s-db').innerHTML = [
+    stat('Tables', db?.tables?.length??0), stat('Dialect', db?.dialect??'postgresql'),
+    ...(db?.tables||[]).slice(0,5).map(t=>stat(t.name,`${t.columns?.length??0}c`)),
+  ].join('');
+
+  const auth = schemas?.auth;
+  document.getElementById('s-auth').innerHTML = [
+    stat('Strategy', auth?.strategy??'jwt'), stat('Roles', auth?.roles?.length??0),
+    ...(auth?.roles||[]).map(r=>stat(r.name, `${r.permissions?.length??0}p`)),
+  ].join('');
+
+  // Assumptions
+  if (assumptions?.length) {
+    document.getElementById('assumpBar').style.display = 'flex';
+    document.getElementById('assumpList').innerHTML = assumptions.slice(0,5).map(a=>`<span class="achip">${esc(a)}</span>`).join('');
+  }
+
+  // JSON tabs
+  setJV('jv-ui', schemas?.ui);
+  setJV('jv-api', schemas?.api);
+  setJV('jv-db', schemas?.db);
+  setJV('jv-auth', schemas?.auth);
+  setJV('jv-ir', appSpec);
+
+  // Simulation
+  renderSimulation(simulation);
+  // Patches
+  renderPatches(patchLog);
+  // Artifacts
+  renderArtifacts(artifacts);
+  // Eval
+  renderEval(evaluation, warnings);
+  // Raw
+  document.getElementById('jv-raw').innerHTML = highlight(JSON.stringify(result, null, 2));
+}
+
+function renderSimulation(sim) {
+  if (!sim) return;
+  const el = document.getElementById('simGrid');
+  const summary = sim.summary || {};
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px;font-size:12px">
+      <span style="font-family:var(--mono);color:${sim.executable?'var(--a3)':'var(--danger)'}">
+        ${sim.executable ? '✓ EXECUTABLE' : '✗ NOT EXECUTABLE'}
+      </span>
+      <span style="color:var(--muted)">${summary.passed}/${summary.total} checks · ${summary.durationMs}ms</span>
+    </div>
+    ${(sim.checks||[]).map(c => `
+      <div class="sim-check ${c.passed?(c.warning?'warn':'pass'):'fail'}">
+        <span class="sim-icon">${c.passed?(c.warning?'⚠':'✓'):'✗'}</span>
+        <div>
+          <div class="sim-name">${esc(c.name)}</div>
+          <div class="sim-detail">${esc(c.details||'')}</div>
+        </div>
+      </div>`).join('')}
+  `;
+}
+
+function renderPatches(patchLog) {
+  if (!patchLog) return;
+  const el = document.getElementById('patchLog');
+  if (!patchLog.patches?.length) {
+    el.innerHTML = '<div style="color:var(--a3);font-family:var(--mono);font-size:12px;padding:40px;text-align:center">✅ No patches needed — schemas were valid</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${patchLog.applied} patches applied · ${patchLog.skipped} skipped</div>
+    ${patchLog.patches.map(p => `
+      <div class="patch">
+        <span class="pop">${esc(p.operation)}</span>
+        <span class="player">[${esc(p.layer||'?')}]</span>
+        ${p.path ? `<span style="color:var(--text)">${esc(p.path)}</span>` : ''}
+        ${p.value?.name ? `<span style="color:var(--muted)"> → ${esc(p.value.name)}</span>` : ''}
+        <span class="preason">${esc(p.reason||'')}</span>
+      </div>`).join('')}
+  `;
+}
+
+function renderArtifacts(artifacts) {
+  if (!artifacts) return;
+  const el = document.getElementById('artifactTree');
+  const entries = Object.entries(artifacts);
+  if (!entries.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:40px;text-align:center">No artifacts generated</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-family:var(--mono)">${entries.length} files generated</div>
+    ${entries.map(([name, content], i) => `
+      <div class="artifact-item">
+        <div class="artifact-header" onclick="toggleArt(${i})">
+          <span>📄 ${esc(name)}</span>
+          <span style="color:var(--muted);font-size:10px">${String(content||'').split('\n').length} lines</span>
+        </div>
+        <div class="artifact-body" id="art-${i}">${esc(String(content||'').slice(0,3000))}</div>
+      </div>`).join('')}
+  `;
+}
+
+function toggleArt(i) {
+  const el = document.getElementById('art-'+i);
+  if (el) el.classList.toggle('open');
+}
+
+function renderEval(ev, warnings) {
+  if (!ev) return;
+  const el = document.getElementById('evalWrap');
+  const grade = ev.grade || 'C';
+  const score = Math.round((ev.score||0)*100);
+  const checks = ev.checks || {};
+  const allW = [...(warnings||[]), ...(ev.warnings||[])];
+
+  el.innerHTML = `
+    <div class="score-row">
+      <div class="score-circle s${grade}"><div class="sv">${score}%</div><div class="sg">Grade ${grade}</div></div>
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Quality Evaluation</div>
+        <div style="font-size:12px;color:var(--muted)">${ev.summary?.pagesGenerated??0} pages · ${ev.summary?.endpointsGenerated??0} endpoints · ${ev.summary?.tablesGenerated??0} tables · Retries: ${ev.retries??0}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Latency: ${ev.latencyMs??'?'}ms</div>
+      </div>
+    </div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Dimensions</div>
+      ${Object.entries(checks).map(([d,r])=>`
+        <div class="dim-bar" style="margin-bottom:6px">
+          <div class="dl">${d}</div>
+          <div class="dt"><div class="df" style="width:${Math.round((r.score||0)*100)}%;background:${scoreCol(r.score||0)}"></div></div>
+          <div class="ds">${Math.round((r.score||0)*100)}%</div>
+        </div>`).join('')}
+    </div>
+    ${allW.length?`<div style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Warnings (${allW.length})</div>
+      ${allW.map(w=>`<div style="font-family:var(--mono);font-size:11px;color:var(--warn);padding:4px 8px;border-left:2px solid var(--warn);margin-bottom:3px">⚠ ${esc(w)}</div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+function scoreCol(s) {
+  if(s>=.8)return'var(--a3)';if(s>=.6)return'var(--a2)';if(s>=.4)return'var(--warn)';return'var(--danger)';
+}
+
+function stat(l,v){return`<div class="sstat"><span class="sstatl">${esc(String(l))}</span><span class="sstatv">${esc(String(v))}</span></div>`}
+
+function setJV(id, data) {
+  const el = document.getElementById(id);
+  if (!data) { el.innerHTML = '<span style="color:var(--muted)">No data</span>'; return; }
+  el.innerHTML = highlight(JSON.stringify(data, null, 2));
+}
+
+function highlight(json) {
+  return json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      let c='jn';
+      if(/^"/.test(m)) c=/:$/.test(m)?'jk':'js';
+      else if(/true|false/.test(m)) c='jb';
+      else if(/null/.test(m)) c='jp';
+      return `<span class="${c}">${m}</span>`;
+    });
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyLayer(l) { if(lastResult?.schemas?.[l]) navigator.clipboard.writeText(JSON.stringify(lastResult.schemas[l],null,2)); }
+function copyIR() { if(lastResult?.appSpec) navigator.clipboard.writeText(JSON.stringify(lastResult.appSpec,null,2)); }
+function copyAll() { if(lastResult) navigator.clipboard.writeText(JSON.stringify(lastResult,null,2)); }
+
+document.addEventListener('keydown', e => {
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter') generate();
+});
+</script>
+</body>
+</html>
